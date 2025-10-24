@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Marfis — Marine & Fisheries Information System (OpenLayers)</title>
+
+  <!-- OpenLayers CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@7.4.0/ol.css">
+  <style>
+    :root{
+      --bg:#071126;
+      --card:#071a26;
+      --accent:#00b4d8;
+      --muted:#94a3b8;
+      --glass: rgba(255,255,255,0.03);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+      background: linear-gradient(180deg,#021224 0%, #03182a 100%);
+      color:#e6eef8;
+    }
+    .container{max-width:1100px;margin:28px auto;padding:20px}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+    .logo{width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#0077b6);display:flex;align-items:center;justify-content:center;font-weight:700;color:#001219}
+    h1{margin:0;font-size:20px}
+    p.lead{margin:2px 0 0;color:var(--muted);font-size:13px}
+
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:18px}
+    .card{background:var(--glass);padding:18px;border-radius:12px;cursor:pointer;border:1px solid rgba(255,255,255,0.03);transition:transform .18s, box-shadow .18s;display:flex;align-items:center;gap:12px}
+    .card:hover{transform:translateY(-6px);box-shadow:0 10px 30px rgba(0,0,0,0.5)}
+    .icon{width:52px;height:52px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;background:linear-gradient(135deg,#001219,#00334d)}
+    .card h3{margin:0;font-size:16px}
+    .card p{margin:4px 0 0;color:var(--muted);font-size:13px}
+
+    .main{margin-top:22px;display:grid;grid-template-columns: 1fr 420px;gap:18px}
+    .panel{background:var(--card);padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);min-height:480px}
+    #map{height:420px;border-radius:10px;overflow:hidden}
+    .detail{color:var(--muted);font-size:14px}
+    .hidden{display:none}
+    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:10px;color:var(--muted);cursor:pointer}
+    @media (max-width:900px){
+      .main{grid-template-columns:1fr}
+      .grid{grid-template-columns:1fr}
+    }
+    /* Popup styling for feature info */
+    .ol-popup {
+      position: absolute;
+      background-color: white;
+      color: black;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      min-width: 140px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">MAR</div>
+      <div>
+        <h1>Marfis — Marine & Fisheries Information System</h1>
+        <p class="lead">Halaman muka (OpenLayers) — pilih bidang untuk membuka dashboard</p>
+      </div>
+    </header>
+
+    <div class="grid" id="menuGrid">
+      <div class="card" data-key="tangkap">
+        <div class="icon">🐟</div>
+        <div><h3>Perikanan Tangkap</h3><p>Lokasi kapal, hotspot, landing site</p></div>
+      </div>
+
+      <div class="card" data-key="budidaya">
+        <div class="icon">🐠</div>
+        <div><h3>Perikanan Budidaya</h3><p>Tambak, keramba, produksi</p></div>
+      </div>
+
+      <div class="card" data-key="kprl">
+        <div class="icon">🌊</div>
+        <div><h3>KPRL</h3><p>Kawasan pesisir, konservasi, tata ruang laut</p></div>
+      </div>
+
+      <div class="card" data-key="pengawasan">
+        <div class="icon">🛥️</div>
+        <div><h3>Pengawasan</h3><p>Patroli, insiden, zona larangan</p></div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="panel" id="contentPanel">
+        <div class="top">
+          <div style="display:flex;gap:12px;align-items:center">
+            <button class="btn" id="backBtn" style="display:none">← Kembali</button>
+            <div id="panelTitle"><strong>Selamat datang di Marfis</strong></div>
+          </div>
+          <div><small style="color:var(--muted)">Prototipe • OpenLayers</small></div>
+        </div>
+
+        <div id="panelIntro">
+          <p class="detail">Pilih salah satu bidang di atas untuk membuka dashboard khusus. Peta di samping akan memuat data GeoJSON bidang terkait.</p>
+        </div>
+
+        <div id="dashboardContent" class="hidden"></div>
+      </div>
+
+      <div class="panel" id="sidePanel">
+        <h4 style="margin-top:0">Peta / Preview</h4>
+        <div id="map" class="map"></div>
+        <div style="margin-top:10px;color:var(--muted);font-size:13px">
+          <div><strong>Bidang aktif:</strong> <span id="activeField">—</span></div>
+          <div id="mapNote" style="margin-top:6px">Letakkan GeoJSON di <code>data/</code> atau gunakan URL endpoint. Pastikan CORS jika menggunakan URL eksternal.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OpenLayers JS -->
+  <script src="https://cdn.jsdelivr.net/npm/ol@7.4.0/dist/ol.js"></script>
+
+  <script>
+    // ----- Konfigurasi file GeoJSON untuk setiap bidang -----
+    // Ganti nilai URL di bawah sesuai lokasi file GeoJSON / endpoint kamu.
+    // Contoh: 'data/perikanan_tangkap.geojson' atau 'https://example.com/api/tangkap'
+    const GEOJSON_SOURCES = {
+      tangkap: 'data/perikanan_tangkap.geojson',
+      budidaya: 'data/perikanan_budidaya.geojson',
+      kprl: 'data/kprl.geojson',
+      pengawasan: 'data/pengawasan.geojson'
+    };
+
+    // ----- Inisialisasi peta OpenLayers -----
+    const view = new ol.View({
+      center: ol.proj.fromLonLat([118, -2.5]), // default pusat Indonesia timur
+      zoom: 5
+    });
+
+    const baseLayer = new ol.layer.Tile({
+      source: new ol.source.OSM()
+    });
+
+    const map = new ol.Map({
+      target: 'map',
+      layers: [baseLayer],
+      view: view,
+      controls: ol.control.defaults({attribution: false, rotate: false})
+    });
+
+    // layer vector aktif (akan diganti tiap kali bidang dipilih)
+    let activeVectorLayer = null;
+
+    // overlay popup
+    const popupContainer = document.createElement('div');
+    popupContainer.className = 'ol-popup';
+    popupContainer.style.display = 'none';
+    document.body.appendChild(popupContainer);
+    const overlay = new ol.Overlay({
+      element: popupContainer,
+      positioning: 'bottom-center',
+      stopEvent: false,
+      offset: [0, -12]
+    });
+    map.addOverlay(overlay);
+
+    // helper: hapus layer vector aktif
+    function removeActiveLayer(){
+      if(activeVectorLayer){
+        map.removeLayer(activeVectorLayer);
+        activeVectorLayer = null;
+      }
+      popupContainer.style.display = 'none';
+    }
+
+    // helper: style untuk titik / poly / garis
+    function styleFunction(feature){
+      const geomType = feature.getGeometry().getType();
+      if(geomType === 'Point' || geomType === 'MultiPoint'){
+        return new ol.style.Style({
+          image: new ol.style.Circle({
+            radius: 7,
+            fill: new ol.style.Fill({color: '#00b4d8'}),
+            stroke: new ol.style.Stroke({color: '#001219', width: 2})
+          })
+        });
+      } else if(geomType === 'Polygon' || geomType === 'MultiPolygon'){
+        return new ol.style.Style({
+          stroke: new ol.style.Stroke({color: '#00b4d8', width: 2}),
+          fill: new ol.style.Fill({color: 'rgba(0,180,216,0.12)'})
+        });
+      } else if(geomType === 'LineString' || geomType === 'MultiLineString'){
+        return new ol.style.Style({
+          stroke: new ol.style.Stroke({color: '#00b4d8', width: 3})
+        });
+      }
+      return null;
+    }
+
+    // fungsi untuk memuat GeoJSON dari URL dan menambahkannya ke peta
+    async function loadGeoJSON(url){
+      removeActiveLayer();
+      try {
+        const res = await fetch(url);
+        if(!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+
+        const vectorSource = new ol.source.Vector({
+          features: new ol.format.GeoJSON().readFeatures(data, {
+            featureProjection: map.getView().getProjection()
+          })
+        });
+
+        activeVectorLayer = new ol.layer.Vector({
+          source: vectorSource,
+          style: styleFunction
+        });
+
+        map.addLayer(activeVectorLayer);
+
+        // zoom to extent if features exist
+        const extent = vectorSource.getExtent();
+        if(!ol.extent.isEmpty(extent)){
+          map.getView().fit(extent, {padding: [30,30,30,30], minResolution: 10});
+        }
+
+        // click interaction untuk popup
+        map.on('singleclick', function(evt){
+          const feature = map.forEachFeatureAtPixel(evt.pixel, f => f);
+          if(feature){
+            const props = feature.getProperties();
+            // hilangkan geometry sebelum menampilkan
+            const displayProps = Object.assign({}, props);
+            delete displayProps.geometry;
+            const title = props.nama || props.name || props.id || 'Objek';
+            const info = Object.entries(displayProps).map(([k,v]) => `<strong>${k}:</strong> ${v}`).join('<br>');
+            popupContainer.innerHTML = `<div style="font-weight:600;margin-bottom:6px">${title}</div>${info}`;
+            overlay.setPosition(evt.coordinate);
+            popupContainer.style.display = 'block';
+          } else {
+            popupContainer.style.display = 'none';
+          }
+        });
+
+      } catch(err){
+        console.error('Gagal muat GeoJSON', err);
+        alert('Gagal memuat data peta: ' + err.message + '\nPeriksa path/URL dan aturan CORS.');
+      }
+    }
+
+    // ----- Interaksi UI -----
+    const cards = document.querySelectorAll('.card');
+    const backBtn = document.getElementById('backBtn');
+    const panelIntro = document.getElementById('panelIntro');
+    const dashboardContent = document.getElementById('dashboardContent');
+    const panelTitle = document.getElementById('panelTitle');
+    const activeField = document.getElementById('activeField');
+
+    function openField(key){
+      panelIntro.style.display = 'none';
+      dashboardContent.style.display = 'block';
+      backBtn.style.display = 'inline-block';
+      activeField.innerText = {
+        tangkap:'Perikanan Tangkap',
+        budidaya:'Perikanan Budidaya',
+        kprl:'KPRL',
+        pengawasan:'Pengawasan'
+      }[key] || key;
+      panelTitle.innerHTML = `<strong>${activeField.innerText}</strong>`;
+      dashboardContent.innerHTML = `
+        <h3 style="margin-top:0">${activeField.innerText}</h3>
+        <p style="color:var(--muted)">Tampilan awal untuk bidang <strong>${activeField.innerText}</strong>. Di sini dapat ditambahkan filter, grafik, tabel, dan tombol aksi.</p>
+        <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn" onclick="alert('Filter tanggal — contoh placeholder')">Filter</button>
+          <button class="btn" onclick="alert('Unduh CSV — placeholder')">Unduh Data</button>
+          <button class="btn" onclick="alert('Buka laporan — placeholder')">Lihat Laporan</button>
+        </div>
+        <div style="margin-top:14px;color:var(--muted)"><em>Info:</em> Peta di kanan akan memuat data GeoJSON bidang ini.</div>
+      `;
+
+      const sourceUrl = GEOJSON_SOURCES[key];
+      if(sourceUrl){
+        loadGeoJSON(sourceUrl);
+      } else {
+        alert('Belum ada sumber data untuk bidang ini.');
+      }
+      document.getElementById('activeField').innerText = activeField.innerText;
+    }
+
+    cards.forEach(c=>{
+      c.addEventListener('click', ()=> {
+        const key = c.getAttribute('data-key');
+        openField(key);
+      })
+    });
+
+    backBtn.addEventListener('click', ()=>{
+      panelIntro.style.display = 'block';
+      dashboardContent.style.display = 'none';
+      backBtn.style.display = 'none';
+      panelTitle.innerHTML = `<strong>Selamat datang di Marfis</strong>`;
+      activeField.innerText = '—';
+      removeActiveLayer();
+      view.setCenter(ol.proj.fromLonLat([118, -2.5]));
+      view.setZoom(5);
+    });
+
+    // ----- Example fallback: jika ingin menampilkan contoh titik tanpa file -----
+    // Jika kamu belum menaruh file geojson, contoh fitur sementara bisa dipanggil manual:
+    // function loadSamplePoints(){
+    //   removeActiveLayer();
+    //   const features = [
+    //     new ol.Feature({geometry: new ol.geom.Point(ol.proj.fromLonLat([107.6,-6.9])), name:'Kapal A', info:'Kapal penangkap'}),
+    //     new ol.Feature({geometry: new ol.geom.Point(ol.proj.fromLonLat([106.8,-6.2])), name:'Pelabuhan B', info:'Pelabuhan'})
+    //   ];
+    //   const src = new ol.source.Vector({features});
+    //   activeVectorLayer = new ol.layer.Vector({source: src, style: styleFunction});
+    //   map.addLayer(activeVectorLayer);
+    // }
+    // loadSamplePoints(); // uncomment untuk menampilkan contoh titik awal
+
+  </script>
+</body>
+</html>
