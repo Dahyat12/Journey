@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Marfis — Marine and Fisheries Information System</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    :root{
+      --bg:#0f1724;
+      --card:#0b1320;
+      --accent:#00b4d8;
+      --muted:#94a3b8;
+      --glass: rgba(255,255,255,0.03);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(180deg, #071126 0%, #03202b 100%);
+      color:#e6eef8;
+      -webkit-font-smoothing:antialiased;
+    }
+    .container{max-width:1100px;margin:28px auto;padding:20px}
+    header{
+      display:flex;align-items:center;gap:16px;margin-bottom:18px;
+    }
+    .logo{
+      width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#0077b6);
+      display:flex;align-items:center;justify-content:center;font-weight:700;color:#001219;
+      box-shadow:0 6px 18px rgba(0,0,0,0.45);
+    }
+    h1{margin:0;font-size:20px}
+    p.lead{margin:2px 0 0;color:var(--muted);font-size:13px}
+
+    .grid{
+      display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:18px;
+    }
+
+    .card{
+      background:var(--glass);padding:18px;border-radius:12px;cursor:pointer;
+      border:1px solid rgba(255,255,255,0.03);transition:transform .18s ease, box-shadow .18s;
+      display:flex;align-items:center;gap:12px;
+    }
+    .card:hover{transform:translateY(-6px);box-shadow:0 10px 30px rgba(0,0,0,0.5)}
+    .card .icon{width:52px;height:52px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;background:linear-gradient(135deg,#001219,#00334d)}
+    .card h3{margin:0;font-size:16px}
+    .card p{margin:4px 0 0;color:var(--muted);font-size:13px}
+
+    /* Main content area */
+    .main{
+      margin-top:22px;display:grid;grid-template-columns: 1fr 420px;gap:18px;
+    }
+    .panel{
+      background:var(--card);padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);
+      min-height:420px;
+    }
+    #map{height:420px;border-radius:10px;overflow:hidden}
+
+    /* detail panel placeholders */
+    .detail{color:var(--muted);font-size:14px}
+    .hidden{display:none}
+
+    /* top action bar inside panel */
+    .panel .top{
+      display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;
+    }
+
+    /* back button */
+    .btn{
+      background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:10px;color:var(--muted);cursor:pointer;
+    }
+    @media (max-width:900px){
+      .main{grid-template-columns:1fr}
+      .grid{grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">MAR</div>
+      <div>
+        <h1>Marfis — Marine & Fisheries Information System</h1>
+        <p class="lead">Halaman muka — pilih bidang untuk melihat dashboard detail</p>
+      </div>
+    </header>
+
+    <!-- tombol bidang -->
+    <div class="grid" id="menuGrid">
+      <div class="card" data-key="tangkap">
+        <div class="icon">🐟</div>
+        <div>
+          <h3>Perikanan Tangkap</h3>
+          <p>Data lokasi kapal, hotspot penangkapan, landing site</p>
+        </div>
+      </div>
+
+      <div class="card" data-key="budidaya">
+        <div class="icon">🐠</div>
+        <div>
+          <h3>Perikanan Budidaya</h3>
+          <p>Tambak, keramba, zona budidaya, produksi</p>
+        </div>
+      </div>
+
+      <div class="card" data-key="kprl">
+        <div class="icon">🌊</div>
+        <div>
+          <h3>KPRL (Kelautan, Pesisir & Ruang Laut)</h3>
+          <p>Kawasan pesisir, konservasi, tata ruang laut</p>
+        </div>
+      </div>
+
+      <div class="card" data-key="pengawasan">
+        <div class="icon">🛥️</div>
+        <div>
+          <h3>Pengawasan</h3>
+          <p>Patroli, insiden, pelanggaran, zona larangan</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- area utama: kiri = panel konten, kanan = ringkasan / peta -->
+    <div class="main">
+      <div class="panel" id="contentPanel">
+        <div class="top">
+          <div style="display:flex;gap:12px;align-items:center">
+            <button class="btn" id="backBtn" style="display:none">← Kembali</button>
+            <div id="panelTitle"><strong>Selamat datang di Marfis</strong></div>
+          </div>
+          <div><small style="color:var(--muted)">Versi prototipe • Dashboard multipilih</small></div>
+        </div>
+
+        <div id="panelIntro">
+          <p class="detail">Pilih salah satu bidang di atas untuk membuka dashboard khusus. Halaman ini berfungsi sebagai pintu masuk visual untuk data perikanan dan kelautan.</p>
+          <ul class="detail">
+            <li>Perikanan Tangkap — menampilkan titik kapal, pelabuhan bongkar, dan hotspot.</li>
+            <li>Perikanan Budidaya — menampilkan tambak/keramba, luas, dan produksi.</li>
+            <li>KPRL — zona pesisir, konservasi, pemetaan habitat.</li>
+            <li>Pengawasan — rute patroli, insiden, koordinat pemeriksaan.</li>
+          </ul>
+        </div>
+
+        <!-- konten per bidang (placeholder) -->
+        <div id="dashboardContent" class="hidden">
+          <!-- will be filled dynamically -->
+        </div>
+      </div>
+
+      <div class="panel" id="sidePanel">
+        <h4 style="margin-top:0">Peta / Preview</h4>
+        <div id="map"></div>
+        <div style="margin-top:10px;color:var(--muted);font-size:13px">
+          <div><strong>Bidang aktif:</strong> <span id="activeField">—</span></div>
+          <div id="mapNote" style="margin-top:6px">Peta menampilkan preview data lokasi. Untuk memuat data kamu, letakkan GeoJSON di folder <code>data/</code> dan edit fungsi loadGeoJSON.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // Inisialisasi peta
+    const map = L.map('map', { zoomControl:false }).setView([-2.5, 118], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Sample marker group untuk preview
+    const markerGroup = L.layerGroup().addTo(map);
+
+    // Simulasi data (contoh) — nanti ganti dengan GeoJSON kamu
+    const sampleData = {
+      tangkap: [
+        {name:'Kapal A', lat:-6.9, lon:107.6, info:'Kapal penangkap, kapasitas 15 GT'},
+        {name:'Pelabuhan B', lat:-6.2, lon:106.8, info:'Pelabuhan kecil - landing site'}
+      ],
+      budidaya: [
+        {name:'Tambak X', lat:-7.2, lon:110.4, info:'Udang - luas 3 ha'},
+        {name:'Keramba Y', lat:-0.9, lon:100.3, info:'Ikan bandeng - produksi 2 ton'}
+      ],
+      kprl: [
+        {name:'Kawasan Konservasi', lat:-2.1, lon:118.7, info:'Zona konservasi'},
+      ],
+      pengawasan: [
+        {name:'Pos Pantau', lat:-1.5, lon:120.6, info:'Pos pengawasan 24 jam'}
+      ]
+    }
+
+    // Reference elements
+    const cards = document.querySelectorAll('.card');
+    const backBtn = document.getElementById('backBtn');
+    const panelIntro = document.getElementById('panelIntro');
+    const dashboardContent = document.getElementById('dashboardContent');
+    const panelTitle = document.getElementById('panelTitle');
+    const activeField = document.getElementById('activeField');
+
+    function clearMarkers(){
+      markerGroup.clearLayers();
+    }
+
+    function showPreviewData(key){
+      clearMarkers();
+      const arr = sampleData[key] || [];
+      if(arr.length){
+        arr.forEach(p=>{
+          const m = L.marker([p.lat,p.lon]).bindPopup(`<strong>${p.name}</strong><br>${p.info}`);
+          markerGroup.addLayer(m);
+        });
+        const latlngs = arr.map(x=>[x.lat,x.lon]);
+        map.fitBounds(latlngs, {padding:[30,30]});
+      } else {
+        map.setView([-2.5,118],5);
+      }
+    }
+
+    function openField(key){
+      panelIntro.style.display = 'none';
+      dashboardContent.style.display = 'block';
+      backBtn.style.display = 'inline-block';
+      activeField.innerText = {
+        tangkap:'Perikanan Tangkap',
+        budidaya:'Perikanan Budidaya',
+        kprl:'KPRL',
+        pengawasan:'Pengawasan'
+      }[key] || key;
+
+      // ubah judul dan isi konten sesuai bidang
+      panelTitle.innerHTML = `<strong>${activeField.innerText}</strong>`;
+      dashboardContent.innerHTML = `
+        <h3 style="margin-top:0">${activeField.innerText}</h3>
+        <p style="color:var(--muted)">Ini adalah tampilan awal dashboard bidang <strong>${activeField.innerText}</strong>. Konten disesuaikan: peta, statistik, filter, tabel, dan grafik.</p>
+        <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn" onclick="alert('Contoh: Filter tanggal belum dikonek')">Filter</button>
+          <button class="btn" onclick="alert('Contoh: Unduh data (CSV)')">Unduh Data</button>
+          <button class="btn" onclick="alert('Contoh: Buka laporan')">Lihat Laporan</button>
+        </div>
+        <div style="margin-top:14px;color:var(--muted)"><em>Catatan:</em> Konten peta di panel kanan menampilkan preview lokasi bidang ini.</div>
+      `;
+
+      // muat preview peta (ganti dengan pemanggilan GeoJSON asli nanti)
+      showPreviewData(key);
+    }
+
+    // Event klik tombol
+    cards.forEach(c=>{
+      c.addEventListener('click', ()=> {
+        const key = c.getAttribute('data-key');
+        openField(key);
+      })
+    });
+
+    backBtn.addEventListener('click', ()=>{
+      panelIntro.style.display = 'block';
+      dashboardContent.style.display = 'none';
+      backBtn.style.display = 'none';
+      panelTitle.innerHTML = `<strong>Selamat datang di Marfis</strong>`;
+      activeField.innerText = '—';
+      clearMarkers();
+      map.setView([-2.5,118],5);
+    });
+
+    // --- Fungsi untuk memuat GeoJSON eksternal (contoh) ---
+    // let geojsonLayer;
+    // function loadGeoJSON(url){
+    //   fetch(url).then(r=>r.json()).then(data=>{
+    //     if(geojsonLayer) map.removeLayer(geojsonLayer);
+    //     geojsonLayer = L.geoJSON(data, {
+    //       onEachFeature: (f, layer) => {
+    //         const p = f.properties || {};
+    //         layer.bindPopup(`<strong>${p.nama || 'obj'}</strong><br>${p.keterangan || ''}`);
+    //       }
+    //     }).addTo(map);
+    //     map.fitBounds(geojsonLayer.getBounds(), {padding:[20,20]});
+    //   }).catch(e=>console.error('Muat GeoJSON gagal', e));
+    // }
+    // Contoh pemanggilan: loadGeoJSON('data/perikanan_tangkap.geojson');
+
+  </script>
+</body>
+</html>
